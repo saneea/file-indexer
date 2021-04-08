@@ -1,11 +1,14 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
-import java.nio.file.FileSystems
-import java.nio.file.Path
-import java.nio.file.StandardWatchEventKinds
-import java.nio.file.WatchKey
+import java.nio.file.*
 
-class FSWatcherService : AutoCloseable {
+enum class FSEventKind {
+    CREATE, DELETE, MODIFY
+}
+
+typealias FSWatcherListener = (FSEventKind, Path) -> Unit
+
+class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     private val watchService = FileSystems.getDefault().newWatchService()
 
@@ -40,10 +43,19 @@ class FSWatcherService : AutoCloseable {
     }
 
     private fun handleWatchEvents(watchKey: WatchKey) {
-        for (watchEvent in watchKey.pollEvents()) {
-            val kind = watchEvent.kind()
-            val context = watchEvent.context()
-            println("$kind: $context")
+        val parentDirPath = watchKey.watchable()
+        if (parentDirPath is Path) {
+            for (watchEvent in watchKey.pollEvents()) {
+                val childPath = watchEvent.context()
+                if (childPath is Path) {
+                    try {
+                        listener(watchEvent.kind().toFSEventKind(), parentDirPath.resolve(childPath))
+                    } catch (e: Exception) {
+                        //TODO log this exception
+                        e.printStackTrace()
+                    }
+                }
+            }
         }
     }
 
@@ -55,3 +67,11 @@ class FSWatcherService : AutoCloseable {
     }
 
 }
+
+private fun <T> WatchEvent.Kind<T>.toFSEventKind() =
+    when (this) {
+        StandardWatchEventKinds.ENTRY_CREATE -> FSEventKind.CREATE
+        StandardWatchEventKinds.ENTRY_DELETE -> FSEventKind.DELETE
+        StandardWatchEventKinds.ENTRY_MODIFY -> FSEventKind.MODIFY
+        else -> throw IllegalArgumentException("Unknown WatchEvent.Kind: $this")
+    }
