@@ -62,15 +62,12 @@ class WhitespaceTokenizerTest {
     private fun parseString(str: String): List<String> {
         val ret: MutableList<String> = ArrayList()
 
-        val listener: TokenizerListener = object : TokenizerListener {
-            override fun onToken(token: String) {
-                ret.add(token)
-            }
-        }
 
         val tokenizer = WhitespaceTokenizer()
 
-        str.reader().use { reader -> tokenizer.parse(reader, listener) }
+        str.reader().use { reader ->
+            tokenizer.parse(reader, ret::add)
+        }
 
         return ret
     }

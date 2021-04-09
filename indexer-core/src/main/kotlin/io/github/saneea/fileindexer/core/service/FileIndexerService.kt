@@ -3,7 +3,6 @@ package io.github.saneea.fileindexer.core.service
 import io.github.saneea.fileindexer.core.filewatcher.FSEventKind
 import io.github.saneea.fileindexer.core.filewatcher.FSWatcherService
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
-import io.github.saneea.fileindexer.core.tokenizer.TokenizerListener
 import java.io.FileInputStream
 import java.nio.file.Path
 
@@ -38,12 +37,9 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         FileInputStream(path.toFile())
             .bufferedReader(Charsets.UTF_8)
             .use { reader ->
-                val tokenizerListener: TokenizerListener = object : TokenizerListener {
-                    override fun onToken(token: String) {
-                        tokensToFiles.addFileForToken(token, path)
-                    }
+                tokenizer.parse(reader) { token: String ->
+                    tokensToFiles.addFileForToken(token, path)
                 }
-                tokenizer.parse(reader, tokenizerListener)
             }
     }
 

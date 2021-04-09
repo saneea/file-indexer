@@ -35,7 +35,7 @@ private class TokenBuffer(var listener: TokenizerListener) : AutoCloseable {
 
     fun flush() {
         if (charBuffer.isNotEmpty()) {
-            listener.onToken(charBuffer.toString())
+            listener(charBuffer.toString())
             charBuffer.clear()
         }
     }
