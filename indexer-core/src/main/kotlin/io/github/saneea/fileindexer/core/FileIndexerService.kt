@@ -2,6 +2,7 @@ package io.github.saneea.fileindexer.core
 
 import io.github.saneea.fileindexer.core.filewatcher.FSEventKind
 import io.github.saneea.fileindexer.core.filewatcher.FSWatcherService
+import io.github.saneea.fileindexer.core.service.TokensToFilesMap
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
 import io.github.saneea.fileindexer.core.tokenizer.TokenizerListener
 import java.io.FileInputStream
@@ -11,6 +12,8 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
     private val fsWatcher = FSWatcherService(::onFSEvent)
 
+    private val tokensToFiles = TokensToFilesMap()
+
     override fun close() {
         fsWatcher.close()
     }
@@ -18,20 +21,18 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
     fun watchDir(dirPath: Path) =
         fsWatcher.watchDir(dirPath)
 
-    private fun onFSEvent(event: FSEventKind, path: Path) {
+    fun getFilesForToken(token: String) =
+        tokensToFiles.getFilesForToken(token)
 
-        print("$event: $path")
+    private fun onFSEvent(event: FSEventKind, path: Path) {
         when (event) {
-            FSEventKind.DELETE -> {
-                //TODO Nothing for now
-            }
+            FSEventKind.DELETE -> tokensToFiles.removeFile(path)
 
             FSEventKind.CREATE, FSEventKind.MODIFY -> {
-                print(", tokens:")
+                tokensToFiles.removeFile(path)
                 parseFile(path)
             }
         }
-        println()
     }
 
     private fun parseFile(path: Path) {
@@ -40,7 +41,7 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
             .use { reader ->
                 val tokenizerListener: TokenizerListener = object : TokenizerListener {
                     override fun onToken(token: String) {
-                        print(" '$token',")
+                        tokensToFiles.addFileForToken(token, path)
                     }
                 }
                 tokenizer.parse(reader, tokenizerListener)
