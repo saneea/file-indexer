@@ -1,8 +1,7 @@
-package io.github.saneea.fileindexer.core
+package io.github.saneea.fileindexer.core.service
 
 import io.github.saneea.fileindexer.core.filewatcher.FSEventKind
 import io.github.saneea.fileindexer.core.filewatcher.FSWatcherService
-import io.github.saneea.fileindexer.core.service.TokensToFilesMap
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
 import io.github.saneea.fileindexer.core.tokenizer.TokenizerListener
 import java.io.FileInputStream
