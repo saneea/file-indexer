@@ -1,12 +1,33 @@
 package io.github.saneea.fileindexer.client
 
+import io.github.saneea.fileindexer.core.service.FileIndexerService
+import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
+import io.github.saneea.fileindexer.core.tokenizer.WhitespaceTokenizer
 import java.awt.event.KeyEvent
 import java.awt.event.KeyListener
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
+import java.nio.file.Path
+import java.nio.file.Paths
 import javax.swing.*
 
 class MainWindow : JFrame() {
 
+    private val tokenizer: Tokenizer = WhitespaceTokenizer()
+
+    private val fileIndexerService = FileIndexerService(tokenizer)
+
     init {
+
+        this.addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent?) {
+                fileIndexerService.close()
+            }
+        })
+
+        //TODO remove debug folder registration
+        fileIndexerService.watchDir(Paths.get("/home/saneea/code/file-indexer/01/tests"))
+
         val listModel = DefaultListModel<String>()
         val foundFilesList = JScrollPane(JList(listModel))
 
@@ -23,9 +44,11 @@ class MainWindow : JFrame() {
         val searchTextListener: (String) -> Unit = { searchText ->
             listModel.clear()
 
-            for (i in 1..searchText.length) {
-                listModel.addElement(searchText)
-            }
+            val filesForToken = fileIndexerService.getFilesForToken(searchText)
+
+            filesForToken
+                .map(Path::toString)
+                .forEach(listModel::addElement)
         }
         searchField.addTextChangedListener(searchTextListener)
 
