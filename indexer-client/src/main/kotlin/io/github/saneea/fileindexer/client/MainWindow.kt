@@ -17,6 +17,10 @@ class MainWindow : JFrame() {
 
     private val fileIndexerService = FileIndexerService(tokenizer)
 
+    private val listModel = DefaultListModel<String>()
+
+    private val searchField = JTextField()
+
     init {
 
         this.addWindowListener(object : WindowAdapter() {
@@ -28,7 +32,6 @@ class MainWindow : JFrame() {
         //TODO remove debug folder registration
         fileIndexerService.watchDir(Paths.get("/home/saneea/code/file-indexer/01/tests"))
 
-        val listModel = DefaultListModel<String>()
         val foundFilesList = JScrollPane(JList(listModel))
 
         val layout = GroupLayout(contentPane)
@@ -38,23 +41,14 @@ class MainWindow : JFrame() {
         layout.autoCreateContainerGaps = true
 
         val searchLabel = JLabel("Search:")
-        val searchField = JTextField()
 
-
-        val searchTextListener: (String) -> Unit = { searchText ->
-            listModel.clear()
-
-            val filesForToken = fileIndexerService.getFilesForToken(searchText)
-
-            filesForToken
-                .map(Path::toString)
-                .forEach(listModel::addElement)
+        searchField.addTextChangedListener {
+            showFilesForSearchText()
         }
-        searchField.addTextChangedListener(searchTextListener)
 
-        val refreshButton = JButton("Refresh")
-        refreshButton.addActionListener { _ ->
-            listModel.add(0, "refresh")
+        val refreshButton = JButton("Search again")
+        refreshButton.addActionListener {
+            showFilesForSearchText()
         }
 
         val settingsButton = JButton("Settings")
@@ -94,6 +88,18 @@ class MainWindow : JFrame() {
         pack()
     }
 
+    fun showFilesForSearchText() {
+        val searchText = searchField.text.trim()
+
+        listModel.clear()
+
+        val filesForToken = fileIndexerService.getFilesForToken(searchText)
+
+        filesForToken
+            .map(Path::toString)
+            .forEach(listModel::addElement)
+    }
+
 }
 
 private fun JTextField.addTextChangedListener(listener: (String) -> Unit) {
@@ -104,3 +110,4 @@ private fun JTextField.addTextChangedListener(listener: (String) -> Unit) {
         override fun keyReleased(e: KeyEvent?) = textChanged()
     })
 }
+
