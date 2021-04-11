@@ -15,7 +15,7 @@ class MainWindow : JFrame() {
 
     private val tokenizer: Tokenizer = WhitespaceTokenizer()
 
-    private val fileIndexerService = FileIndexerService(tokenizer)
+    val fileIndexerService = FileIndexerService(tokenizer)
 
     private val listModel = DefaultListModel<String>()
 
@@ -28,15 +28,11 @@ class MainWindow : JFrame() {
     private val refreshButton = JButton("Search again")
     private val settingsButton = JButton("Settings")
 
+    private val settingsDialog = SettingsDialog(this)
+
     init {
-
         registerControlsActions()
-
-        //TODO remove debug folder registration
-        fileIndexerService.watchDir(Paths.get("/home/saneea/code/file-indexer/01/tests"))
-
         createLayout()
-
         pack()
     }
 
@@ -50,7 +46,16 @@ class MainWindow : JFrame() {
         refreshButton.addActionListener {
             showFilesForSearchText()
         }
+
+        settingsButton.addActionListener {
+            openSettingsDialog()
+        }
     }
+
+    private fun openSettingsDialog() {
+        settingsDialog.isVisible = true
+    }
+
 
     private fun createLayout() {
         val layout = GroupLayout(contentPane)
@@ -95,6 +100,7 @@ class MainWindow : JFrame() {
     private fun registerOnWindowClosedActions() {
         this.addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent?) {
+                settingsDialog.dispose()
                 fileIndexerService.close()
             }
         })
