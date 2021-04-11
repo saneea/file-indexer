@@ -26,6 +26,14 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
             StandardWatchEventKinds.ENTRY_DELETE,
             StandardWatchEventKinds.ENTRY_MODIFY
         )
+
+        Files.walk(dirPath).use { filesStream ->
+            filesStream
+                .filter(Files::isRegularFile)
+                .forEach { filePath ->
+                    listener(FSEventKind.CREATE, filePath)
+                }
+        }
     }
 
     private fun handleWatchKeys() {
