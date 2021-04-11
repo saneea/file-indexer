@@ -19,39 +19,45 @@ class MainWindow : JFrame() {
 
     private val listModel = DefaultListModel<String>()
 
+    private val searchLabel = JLabel("Search:")
+
     private val searchField = JTextField()
+
+    private val foundFilesList = JScrollPane(JList(listModel))
+
+    private val refreshButton = JButton("Search again")
+    private val settingsButton = JButton("Settings")
 
     init {
 
-        this.addWindowListener(object : WindowAdapter() {
-            override fun windowClosed(e: WindowEvent?) {
-                fileIndexerService.close()
-            }
-        })
+        registerControlsActions()
 
         //TODO remove debug folder registration
         fileIndexerService.watchDir(Paths.get("/home/saneea/code/file-indexer/01/tests"))
 
-        val foundFilesList = JScrollPane(JList(listModel))
+        createLayout()
 
-        val layout = GroupLayout(contentPane)
-        contentPane.layout = layout
+        pack()
+    }
 
-        layout.autoCreateGaps = true
-        layout.autoCreateContainerGaps = true
-
-        val searchLabel = JLabel("Search:")
+    private fun registerControlsActions() {
+        registerOnWindowClosedActions()
 
         searchField.addTextChangedListener {
             showFilesForSearchText()
         }
 
-        val refreshButton = JButton("Search again")
         refreshButton.addActionListener {
             showFilesForSearchText()
         }
+    }
 
-        val settingsButton = JButton("Settings")
+    private fun createLayout() {
+        val layout = GroupLayout(contentPane)
+        contentPane.layout = layout
+
+        layout.autoCreateGaps = true
+        layout.autoCreateContainerGaps = true
 
         layout.setHorizontalGroup(
             layout.createParallelGroup()
@@ -84,11 +90,17 @@ class MainWindow : JFrame() {
         )
 
         layout.linkSize(SwingConstants.VERTICAL, searchField)
-
-        pack()
     }
 
-    fun showFilesForSearchText() {
+    private fun registerOnWindowClosedActions() {
+        this.addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent?) {
+                fileIndexerService.close()
+            }
+        })
+    }
+
+    private fun showFilesForSearchText() {
         val searchText = searchField.text.trim()
 
         listModel.clear()
