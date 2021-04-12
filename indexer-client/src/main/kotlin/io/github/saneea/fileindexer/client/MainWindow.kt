@@ -2,18 +2,17 @@ package io.github.saneea.fileindexer.client
 
 import io.github.saneea.fileindexer.core.service.FileIndexerService
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
-import io.github.saneea.fileindexer.core.tokenizer.WhitespaceTokenizer
+import io.github.saneea.fileindexer.core.tokenizer.LettersDigitsTokenizer
 import java.awt.event.KeyEvent
 import java.awt.event.KeyListener
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.nio.file.Path
-import java.nio.file.Paths
 import javax.swing.*
 
 class MainWindow : JFrame() {
 
-    private val tokenizer: Tokenizer = WhitespaceTokenizer()
+    private val tokenizer: Tokenizer = LettersDigitsTokenizer()
 
     val fileIndexerService = FileIndexerService(tokenizer)
 

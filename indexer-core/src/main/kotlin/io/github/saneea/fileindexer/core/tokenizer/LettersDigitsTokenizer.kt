@@ -2,7 +2,7 @@ package io.github.saneea.fileindexer.core.tokenizer
 
 import java.io.Reader
 
-class WhitespaceTokenizer : Tokenizer {
+class LettersDigitsTokenizer : Tokenizer {
 
     override fun parse(reader: Reader, listener: TokenizerListener) {
 
@@ -15,10 +15,10 @@ class WhitespaceTokenizer : Tokenizer {
 
                 val char = codePoint.toChar()
 
-                if (char.isWhitespace()) {
-                    tokenBuffer.flush()
-                } else {
+                if (char.isLetterOrDigit()) {
                     tokenBuffer.add(char)
+                } else {
+                    tokenBuffer.flush()
                 }
             }
         }
