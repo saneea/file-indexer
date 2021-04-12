@@ -12,24 +12,49 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     private val delFileButton = JButton("- file")
 
     private val currentWatchEntriesListModel = DefaultListModel<Path>()
-    private val currentWatchEntriesList = JScrollPane(JList(currentWatchEntriesListModel))
+    private val currentWatchEntriesList = JList(currentWatchEntriesListModel)
+    private val currentWatchEntriesListWithScroll = JScrollPane(currentWatchEntriesList)
+
+    private val selectedEntry: Path?
+        get() = currentWatchEntriesList.selectedValue
 
     init {
-        registerButtonActions()
+        registerUIActions()
         initButtonsSettings()
         createLayout()
         pack()
     }
 
     private fun initButtonsSettings() {
+        updateDelDirButton()
+
         //TODO disable these buttons for now (there were no backend implementation for them)
-        delDirButton.isEnabled = false
         addFileButton.isEnabled = false
         delFileButton.isEnabled = false
     }
 
+    private fun registerUIActions() {
+        registerButtonActions()
+    }
+
     private fun registerButtonActions() {
+        currentWatchEntriesList.addListSelectionListener { updateDelDirButton() }
+
         registerAddDirButtonAction()
+        registerDelDirButtonAction()
+    }
+
+    private fun registerDelDirButtonAction() {
+        delDirButton.addActionListener {
+            if (selectedEntry != null) {
+                ownerWindow.fileIndexerService.unregisterDir(selectedEntry!!)
+                currentWatchEntriesListModel.removeElement(selectedEntry)
+            }
+        }
+    }
+
+    private fun updateDelDirButton() {
+        delDirButton.isEnabled = selectedEntry != null
     }
 
     private fun registerAddDirButtonAction() {
@@ -38,7 +63,7 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             fileChooserDialog.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                ownerWindow.fileIndexerService.watchDir(pathToAdd)
+                ownerWindow.fileIndexerService.registerDir(pathToAdd)
                 currentWatchEntriesListModel.addElement(pathToAdd)
             }
         }
@@ -60,7 +85,7 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
                         .addComponent(addFileButton)
                         .addComponent(delFileButton)
                 )
-                .addComponent(currentWatchEntriesList)
+                .addComponent(currentWatchEntriesListWithScroll)
         )
 
         layout.setVerticalGroup(
@@ -72,7 +97,7 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
                         .addComponent(addFileButton)
                         .addComponent(delFileButton)
                 )
-                .addComponent(currentWatchEntriesList)
+                .addComponent(currentWatchEntriesListWithScroll)
         )
     }
 

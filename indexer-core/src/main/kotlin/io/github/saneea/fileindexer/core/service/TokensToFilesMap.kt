@@ -25,4 +25,20 @@ class TokensToFilesMap {
 
     private fun getFilesSetForToken(token: String): ConcurrentMap<Path, Any> =
         tokensToFiles.computeIfAbsent(token) { ConcurrentHashMap() }
+
+    fun removeFilesFromDir(dirPath: Path) {
+        tokensToFiles.forEach { (_, fileSet) ->
+            fileSet.removeIf { filePath -> filePath.parent.equals(dirPath) }
+        }
+    }
+}
+
+private fun <K, V> MutableMap<K, V>.removeIf(predicate: (key: K) -> Boolean) {
+    val iterator = this.iterator()
+    while (iterator.hasNext()) {
+        val next = iterator.next()
+        if (predicate(next.key)) {
+            iterator.remove()
+        }
+    }
 }

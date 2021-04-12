@@ -3,7 +3,7 @@ package io.github.saneea.fileindexer.core.filewatcher
 import java.nio.file.*
 
 enum class FSEventKind {
-    CREATE, DELETE, MODIFY
+    CREATE, DELETE, MODIFY, START_WATCH, STOP_WATCH
 }
 
 typealias FSWatcherListener = (FSEventKind, Path) -> Unit
@@ -19,7 +19,7 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
         backgroundThread.start()
     }
 
-    fun watchDir(dirPath: Path) {
+    fun registerDir(dirPath: Path) {
         dirPath.register(
             watchService,
             StandardWatchEventKinds.ENTRY_CREATE,
@@ -27,13 +27,11 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
             StandardWatchEventKinds.ENTRY_MODIFY
         )
 
-        Files.walk(dirPath).use { filesStream ->
-            filesStream
-                .filter(Files::isRegularFile)
-                .forEach { filePath ->
-                    listener(FSEventKind.CREATE, filePath)
-                }
-        }
+        listener(FSEventKind.START_WATCH, dirPath)
+    }
+
+    fun unregisterDir(dirPath: Path) {
+        listener(FSEventKind.STOP_WATCH, dirPath)
     }
 
     private fun handleWatchKeys() {
