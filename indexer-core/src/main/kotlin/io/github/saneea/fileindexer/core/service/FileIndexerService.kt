@@ -19,6 +19,10 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
     fun unregisterDir(dirPath: Path) = fsWatcher.unregisterDir(dirPath)
 
+    fun registerFile(filePath: Path) = fsWatcher.registerFile(filePath)
+
+    fun unregisterFile(filePath: Path) = fsWatcher.unregisterFile(filePath)
+
     fun getFilesForToken(token: String) = tokensToFiles.getFilesForToken(token)
 
     private fun onFSEvent(event: FSEventKind, path: Path) {
@@ -30,9 +34,13 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
                 parseFile(path)
             }
 
-            FSEventKind.START_WATCH -> addFilesFromDir(path)
+            FSEventKind.START_WATCH_DIR -> addFilesFromDir(path)
 
-            FSEventKind.STOP_WATCH -> removeFilesFromDir(path)
+            FSEventKind.STOP_WATCH_DIR -> removeFilesFromDir(path)
+
+            FSEventKind.START_WATCH_FILE -> parseFile(path)
+
+            FSEventKind.STOP_WATCH_FILE -> tokensToFiles.removeFile(path)
         }
     }
 

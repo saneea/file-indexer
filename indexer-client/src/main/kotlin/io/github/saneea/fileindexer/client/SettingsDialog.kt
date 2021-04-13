@@ -3,6 +3,15 @@ package io.github.saneea.fileindexer.client
 import java.nio.file.Path
 import javax.swing.*
 
+data class WatchEntry(
+    val isFile: Boolean,
+    val path: Path
+) {
+    override fun toString(): String {
+        return "${if (isFile) "File" else "Dir"}: $path"
+    }
+}
+
 class SettingsDialog(private val ownerWindow: MainWindow) :
     JDialog(ownerWindow, "Settings", false) {
 
@@ -11,11 +20,11 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     private val addFileButton = JButton("+ file")
     private val delFileButton = JButton("- file")
 
-    private val currentWatchEntriesListModel = DefaultListModel<Path>()
+    private val currentWatchEntriesListModel = DefaultListModel<WatchEntry>()
     private val currentWatchEntriesList = JList(currentWatchEntriesListModel)
     private val currentWatchEntriesListWithScroll = JScrollPane(currentWatchEntriesList)
 
-    private val selectedEntry: Path?
+    private val selectedEntry: WatchEntry?
         get() = currentWatchEntriesList.selectedValue
 
     init {
@@ -26,11 +35,12 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     }
 
     private fun initButtonsSettings() {
-        updateDelDirButton()
+        updateButtonsSettings()
+    }
 
-        //TODO disable these buttons for now (there were no backend implementation for them)
-        addFileButton.isEnabled = false
-        delFileButton.isEnabled = false
+    private fun updateButtonsSettings() {
+        updateDelDirButton()
+        updateDelFileButton()
     }
 
     private fun registerUIActions() {
@@ -38,23 +48,39 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     }
 
     private fun registerButtonActions() {
-        currentWatchEntriesList.addListSelectionListener { updateDelDirButton() }
+        currentWatchEntriesList.addListSelectionListener { updateButtonsSettings() }
 
         registerAddDirButtonAction()
         registerDelDirButtonAction()
+
+        registerAddFileButtonAction()
+        registerDelFileButtonAction()
     }
 
     private fun registerDelDirButtonAction() {
         delDirButton.addActionListener {
             if (selectedEntry != null) {
-                ownerWindow.fileIndexerService.unregisterDir(selectedEntry!!)
+                ownerWindow.fileIndexerService.unregisterDir(selectedEntry!!.path)
+                currentWatchEntriesListModel.removeElement(selectedEntry)
+            }
+        }
+    }
+
+    private fun registerDelFileButtonAction() {
+        delFileButton.addActionListener {
+            if (selectedEntry != null) {
+                ownerWindow.fileIndexerService.unregisterFile(selectedEntry!!.path)
                 currentWatchEntriesListModel.removeElement(selectedEntry)
             }
         }
     }
 
     private fun updateDelDirButton() {
-        delDirButton.isEnabled = selectedEntry != null
+        delDirButton.isEnabled = selectedEntry != null && !selectedEntry!!.isFile
+    }
+
+    private fun updateDelFileButton() {
+        delFileButton.isEnabled = selectedEntry != null && selectedEntry!!.isFile
     }
 
     private fun registerAddDirButtonAction() {
@@ -64,7 +90,19 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
                 ownerWindow.fileIndexerService.registerDir(pathToAdd)
-                currentWatchEntriesListModel.addElement(pathToAdd)
+                currentWatchEntriesListModel.addElement(WatchEntry(false, pathToAdd))
+            }
+        }
+    }
+
+    private fun registerAddFileButtonAction() {
+        addFileButton.addActionListener {
+            val fileChooserDialog = JFileChooser()
+            fileChooserDialog.fileSelectionMode = JFileChooser.FILES_ONLY
+            if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                val pathToAdd = fileChooserDialog.selectedFile.toPath()
+                ownerWindow.fileIndexerService.registerFile(pathToAdd)
+                currentWatchEntriesListModel.addElement(WatchEntry(true, pathToAdd))
             }
         }
     }
