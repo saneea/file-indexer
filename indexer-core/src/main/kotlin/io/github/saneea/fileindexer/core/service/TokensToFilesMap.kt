@@ -1,5 +1,6 @@
 package io.github.saneea.fileindexer.core.service
 
+import io.github.saneea.fileindexer.core.utils.removeIf
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -25,4 +26,10 @@ class TokensToFilesMap {
 
     private fun getFilesSetForToken(token: String): ConcurrentMap<Path, Any> =
         tokensToFiles.computeIfAbsent(token) { ConcurrentHashMap() }
+
+    fun removeFilesFromDir(dirPath: Path) {
+        tokensToFiles.forEach { (_, fileSet) ->
+            fileSet.removeIf { filePath -> filePath.parent.equals(dirPath) }
+        }
+    }
 }
