@@ -1,5 +1,6 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
+import io.github.saneea.fileindexer.core.utils.UsageRegistry
 import java.nio.file.*
 
 class DirWatcher(val listener: (EventKind, Path) -> Unit) : AutoCloseable {
@@ -8,13 +9,22 @@ class DirWatcher(val listener: (EventKind, Path) -> Unit) : AutoCloseable {
         CREATE, DELETE, MODIFY
     }
 
-    data class Registration(private val watchKey: WatchKey) {
-        fun cancel() = watchKey.cancel()
+    data class Registration(
+        private val watchKeyRegistry: UsageRegistry<WatchKey>,
+        private val watchKey: WatchKey
+    ) {
+        init {
+            watchKeyRegistry.inUse(watchKey)
+        }
+
+        fun cancel() = watchKeyRegistry.free(watchKey, WatchKey::cancel)
     }
 
     private val watchService = FileSystems.getDefault().newWatchService()
 
     private val backgroundThread = Thread(this::handleWatchKeys, "FSWatcher")
+
+    private val watchKeyRegistry = UsageRegistry<WatchKey>()
 
     init {
         backgroundThread.isDaemon = true
@@ -23,6 +33,7 @@ class DirWatcher(val listener: (EventKind, Path) -> Unit) : AutoCloseable {
 
     fun register(dirPath: Path) =
         Registration(
+            watchKeyRegistry,
             dirPath.register(
                 watchService,
                 StandardWatchEventKinds.ENTRY_CREATE,
