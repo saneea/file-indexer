@@ -1,5 +1,6 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
+import io.github.saneea.fileindexer.core.utils.Cache
 import io.github.saneea.fileindexer.core.utils.removeIf
 import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
@@ -36,30 +37,29 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     private val watchFilters = ConcurrentHashMap<Path, ConcurrentHashMap<WatchDirFilter, Any>>()
 
+    private val watchEntriesCache = Cache<WatchEntry, Registration>()
+
     data class Registration(
         val watchEntry: WatchEntry,
-        private val dirRegistration: DirWatcher.Registration,
+        internal val dirRegistration: DirWatcher.Registration,
         private val service: FSWatcherService
     ) {
-        fun cancel() {
-            dirRegistration.cancel()
-            if (watchEntry.isFile) {
-                service.unregisterFile(watchEntry.path)
-            } else {
-                service.unregisterDir(watchEntry.path)
-            }
-        }
+        fun cancel() = service.cancelRegistration(this)
     }
 
-    fun registerFile(filePath: Path): Registration {
-        val dirPath = filePath.parent
-        getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
-        val registration = dirWatcher.register(dirPath)
-        listener(FSEventKind.START_WATCH_FILE, filePath)
-        return Registration(
-            WatchEntry(isFile = true, filePath), registration, this
-        )
-    }
+    fun registerFile(filePath: Path): Registration =
+        watchEntriesCache.getOrCreate(
+            WatchEntry(isFile = true, filePath)
+        ) { watchEntry ->
+            val dirPath = filePath.parent
+            getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
+            val registration = dirWatcher.register(dirPath)
+            listener(FSEventKind.START_WATCH_FILE, filePath)
+
+            Registration(
+                watchEntry, registration, this
+            )
+        }
 
     private fun unregisterFile(filePath: Path) {
         val dirPath = filePath.parent
@@ -69,19 +69,33 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
         listener(FSEventKind.STOP_WATCH_FILE, filePath)
     }
 
-    fun registerDir(dirPath: Path): Registration {
-        getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
-        val registration = dirWatcher.register(dirPath)
-        listener(FSEventKind.START_WATCH_DIR, dirPath)
-        return Registration(
-            WatchEntry(isFile = false, dirPath), registration, this
-        )
-    }
+    fun registerDir(dirPath: Path): Registration =
+        watchEntriesCache.getOrCreate(
+            WatchEntry(isFile = false, dirPath)
+        ) { watchEntry ->
+            getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
+            val registration = dirWatcher.register(dirPath)
+            listener(FSEventKind.START_WATCH_DIR, dirPath)
+
+            Registration(
+                watchEntry, registration, this
+            )
+        }
 
     private fun unregisterDir(dirPath: Path) {
         getWatchFiltersForDir(dirPath).removeIf(WatchDirFilter::isAllFiles)
         listener(FSEventKind.STOP_WATCH_DIR, dirPath)
     }
+
+    private fun cancelRegistration(registration: Registration) =
+        watchEntriesCache.free(registration.watchEntry) { watchEntry, _ ->
+            registration.dirRegistration.cancel()
+            if (watchEntry.isFile) {
+                unregisterFile(watchEntry.path)
+            } else {
+                unregisterDir(watchEntry.path)
+            }
+        }
 
     private fun getWatchFiltersForDir(dirPath: Path) = watchFilters.computeIfAbsent(dirPath) { ConcurrentHashMap() }
 

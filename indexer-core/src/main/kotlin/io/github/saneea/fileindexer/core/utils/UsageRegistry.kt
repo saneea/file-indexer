@@ -12,6 +12,7 @@ class UsageRegistry<T> {
 
     fun free(obj: T, destructor: (T) -> Unit) {
         if (with(getCounter(obj)) { --current } == 0) {
+            counters.remove(obj)
             destructor(obj)
         }
     }
