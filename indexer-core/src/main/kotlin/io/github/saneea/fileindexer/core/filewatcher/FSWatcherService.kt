@@ -1,5 +1,6 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
+import io.github.saneea.fileindexer.core.utils.Cache
 import io.github.saneea.fileindexer.core.utils.removeIf
 import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
@@ -23,114 +24,97 @@ class OneFileWatchDirFilter(val allowedFilePath: Path) : WatchDirFilter {
     override fun isFileAllowed(filePath: Path) = allowedFilePath == filePath
 }
 
+data class WatchEntry(
+    val isFile: Boolean,
+    val path: Path
+)
+
 typealias FSWatcherListener = (FSEventKind, Path) -> Unit
 
 class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
-    private val watchService = FileSystems.getDefault().newWatchService()
-
-    private val backgroundThread = Thread(this::handleWatchKeys, "FSWatcher")
+    private val dirWatcher = DirWatcher(this::handleDirWatchEvents)
 
     private val watchFilters = ConcurrentHashMap<Path, ConcurrentHashMap<WatchDirFilter, Any>>()
 
-    init {
-        backgroundThread.isDaemon = true
-        backgroundThread.start()
+    private val watchEntriesCache = Cache<WatchEntry, Registration>()
+
+    data class Registration(
+        val watchEntry: WatchEntry,
+        internal val dirRegistration: DirWatcher.Registration,
+        private val service: FSWatcherService
+    ) {
+        fun cancel() = service.cancelRegistration(this)
     }
 
-    fun registerFile(filePath: Path) {
-        val dirPath = filePath.parent
-        getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
-        registerDirInternal(dirPath)
-        listener(FSEventKind.START_WATCH_FILE, filePath)
-    }
+    fun registerFile(filePath: Path): Registration =
+        watchEntriesCache.getOrCreate(
+            WatchEntry(isFile = true, filePath)
+        ) { watchEntry ->
+            val dirPath = filePath.parent
+            getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
+            val registration = dirWatcher.register(dirPath)
+            listener(FSEventKind.START_WATCH_FILE, filePath)
 
-    fun unregisterFile(filePath: Path) {
+            Registration(
+                watchEntry, registration, this
+            )
+        }
+
+    private fun unregisterFile(filePath: Path) {
         val dirPath = filePath.parent
         getWatchFiltersForDir(dirPath).removeIf {
             it is OneFileWatchDirFilter && it.allowedFilePath == filePath
         }
-        unregisterDirInternal(dirPath)
         listener(FSEventKind.STOP_WATCH_FILE, filePath)
     }
 
-    fun registerDir(dirPath: Path) {
-        getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
-        registerDirInternal(dirPath)
-        listener(FSEventKind.START_WATCH_DIR, dirPath)
-    }
+    fun registerDir(dirPath: Path): Registration =
+        watchEntriesCache.getOrCreate(
+            WatchEntry(isFile = false, dirPath)
+        ) { watchEntry ->
+            getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
+            val registration = dirWatcher.register(dirPath)
+            listener(FSEventKind.START_WATCH_DIR, dirPath)
 
-    fun unregisterDir(dirPath: Path) {
+            Registration(
+                watchEntry, registration, this
+            )
+        }
+
+    private fun unregisterDir(dirPath: Path) {
         getWatchFiltersForDir(dirPath).removeIf(WatchDirFilter::isAllFiles)
-        unregisterDirInternal(dirPath)
         listener(FSEventKind.STOP_WATCH_DIR, dirPath)
     }
 
-    private fun registerDirInternal(dirPath: Path) {
-        dirPath.register(
-            watchService,
-            StandardWatchEventKinds.ENTRY_CREATE,
-            StandardWatchEventKinds.ENTRY_DELETE,
-            StandardWatchEventKinds.ENTRY_MODIFY
-        )
-    }
-
-    private fun unregisterDirInternal(dirPath: Path) {
-        //TODO implement
-    }
+    private fun cancelRegistration(registration: Registration) =
+        watchEntriesCache.free(registration.watchEntry) { watchEntry, _ ->
+            registration.dirRegistration.cancel()
+            if (watchEntry.isFile) {
+                unregisterFile(watchEntry.path)
+            } else {
+                unregisterDir(watchEntry.path)
+            }
+        }
 
     private fun getWatchFiltersForDir(dirPath: Path) = watchFilters.computeIfAbsent(dirPath) { ConcurrentHashMap() }
 
-    private fun handleWatchKeys() {
-        try {
-            while (true) {
-                val watchKey = watchService.take()
-                if (watchKey != null) {
-                    handleWatchEvents(watchKey)
-                }
-                watchKey.reset()
-            }
-        } catch (e: InterruptedException) {
-            //it is normal ending of background thread
-        }
-    }
-
-    private fun handleWatchEvents(watchKey: WatchKey) {
-        val parentDirPath = watchKey.watchable()
-        if (parentDirPath is Path) {
-            for (watchEvent in watchKey.pollEvents()) {
-                val childPath = watchEvent.context()
-                if (childPath is Path) {
-                    val resolvedFilePath = parentDirPath.resolve(childPath)
-                    if (isFileAllowed(resolvedFilePath)) {
-                        try {
-                            listener(watchEvent.kind().toFSEventKind(), resolvedFilePath)
-                        } catch (e: Exception) {
-                            //TODO log this exception
-                            e.printStackTrace()
-                        }
-                    }
-                }
-            }
+    private fun handleDirWatchEvents(eventKind: DirWatcher.EventKind, path: Path) {
+        if (isFileAllowed(path)) {
+            listener(eventKind.toFSEventKind(), path)
         }
     }
 
     private fun isFileAllowed(filePath: Path) =
         watchFilters[filePath.parent]?.keys?.any { it.isFileAllowed(filePath) } ?: false
 
-    override fun close() {
-        backgroundThread.interrupt()
-        backgroundThread.join()
-
-        watchService.close()
-    }
+    override fun close() = dirWatcher.close()
 
 }
 
-private fun <T> WatchEvent.Kind<T>.toFSEventKind() =
+private fun DirWatcher.EventKind.toFSEventKind() =
     when (this) {
-        StandardWatchEventKinds.ENTRY_CREATE -> FSEventKind.CREATE
-        StandardWatchEventKinds.ENTRY_DELETE -> FSEventKind.DELETE
-        StandardWatchEventKinds.ENTRY_MODIFY -> FSEventKind.MODIFY
-        else -> throw IllegalArgumentException("Unknown WatchEvent.Kind: $this")
+        DirWatcher.EventKind.CREATE -> FSEventKind.CREATE
+        DirWatcher.EventKind.DELETE -> FSEventKind.DELETE
+        DirWatcher.EventKind.MODIFY -> FSEventKind.MODIFY
     }
