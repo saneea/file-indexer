@@ -1,14 +1,14 @@
 package io.github.saneea.fileindexer.client
 
-import java.nio.file.Path
+import io.github.saneea.fileindexer.core.filewatcher.FSWatcherService
 import javax.swing.*
 
 data class WatchEntry(
-    val isFile: Boolean,
-    val path: Path
+    val registration: FSWatcherService.Registration
 ) {
     override fun toString(): String {
-        return "${if (isFile) "File" else "Dir"}: $path"
+        val entry = registration.watchEntry
+        return "${if (entry.isFile) "File" else "Dir"}: ${entry.path}"
     }
 }
 
@@ -39,8 +39,8 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     }
 
     private fun updateButtonsSettings() {
-        updateDelDirButton()
-        updateDelFileButton()
+        updateDelFSEntryButton(delDirButton, isFile = false)
+        updateDelFSEntryButton(delFileButton, isFile = true)
     }
 
     private fun registerUIActions() {
@@ -51,36 +51,23 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
         currentWatchEntriesList.addListSelectionListener { updateButtonsSettings() }
 
         registerAddDirButtonAction()
-        registerDelDirButtonAction()
+        registerDelFSEntryButtonAction(delDirButton)
 
         registerAddFileButtonAction()
-        registerDelFileButtonAction()
+        registerDelFSEntryButtonAction(delFileButton)
     }
 
-    private fun registerDelDirButtonAction() {
-        delDirButton.addActionListener {
+    private fun registerDelFSEntryButtonAction(button: JButton) {
+        button.addActionListener {
             if (selectedEntry != null) {
-                ownerWindow.fileIndexerService.unregisterDir(selectedEntry!!.path)
+                selectedEntry!!.registration.cancel()
                 currentWatchEntriesListModel.removeElement(selectedEntry)
             }
         }
     }
 
-    private fun registerDelFileButtonAction() {
-        delFileButton.addActionListener {
-            if (selectedEntry != null) {
-                ownerWindow.fileIndexerService.unregisterFile(selectedEntry!!.path)
-                currentWatchEntriesListModel.removeElement(selectedEntry)
-            }
-        }
-    }
-
-    private fun updateDelDirButton() {
-        delDirButton.isEnabled = selectedEntry != null && !selectedEntry!!.isFile
-    }
-
-    private fun updateDelFileButton() {
-        delFileButton.isEnabled = selectedEntry != null && selectedEntry!!.isFile
+    private fun updateDelFSEntryButton(button: JButton, isFile: Boolean) {
+        button.isEnabled = selectedEntry != null && isFile == selectedEntry!!.registration.watchEntry.isFile
     }
 
     private fun registerAddDirButtonAction() {
@@ -89,8 +76,8 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             fileChooserDialog.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                ownerWindow.fileIndexerService.registerDir(pathToAdd)
-                currentWatchEntriesListModel.addElement(WatchEntry(false, pathToAdd))
+                val watcherRegistration = ownerWindow.fileIndexerService.registerDir(pathToAdd)
+                currentWatchEntriesListModel.addElement(WatchEntry(watcherRegistration))
             }
         }
     }
@@ -101,8 +88,8 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             fileChooserDialog.fileSelectionMode = JFileChooser.FILES_ONLY
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                ownerWindow.fileIndexerService.registerFile(pathToAdd)
-                currentWatchEntriesListModel.addElement(WatchEntry(true, pathToAdd))
+                val watcherRegistration = ownerWindow.fileIndexerService.registerFile(pathToAdd)
+                currentWatchEntriesListModel.addElement(WatchEntry(watcherRegistration))
             }
         }
     }
