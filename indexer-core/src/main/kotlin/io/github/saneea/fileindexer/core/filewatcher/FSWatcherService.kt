@@ -2,12 +2,9 @@ package io.github.saneea.fileindexer.core.filewatcher
 
 import io.github.saneea.fileindexer.core.utils.Cache
 import io.github.saneea.fileindexer.core.utils.removeIf
-import java.nio.file.*
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-
-enum class FSEventKind {
-    CREATE, DELETE, MODIFY, START_WATCH_DIR, STOP_WATCH_DIR, START_WATCH_FILE, STOP_WATCH_FILE
-}
 
 interface WatchDirFilter {
     val isAllFiles: Boolean
@@ -51,10 +48,13 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
         watchEntriesCache.getOrCreate(
             WatchEntry(isFile = true, filePath)
         ) { watchEntry ->
+            val isAlreadyWatched = isFileAllowed(filePath)
             val dirPath = filePath.parent
             getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
             val registration = dirWatcher.register(dirPath)
-            listener(FSEventKind.START_WATCH_FILE, filePath)
+            if (!isAlreadyWatched) {
+                listener(FSEventKind.CREATE, filePath)
+            }
 
             Registration(
                 watchEntry, registration, this
@@ -64,27 +64,43 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
     private fun unregisterFile(filePath: Path) {
         val dirPath = filePath.parent
         getWatchFiltersForDir(dirPath).removeIf {
-            it is OneFileWatchDirFilter && it.allowedFilePath == filePath
+            (it as? OneFileWatchDirFilter)?.allowedFilePath == filePath
         }
-        listener(FSEventKind.STOP_WATCH_FILE, filePath)
+        stopWatchingFile(filePath)
     }
 
     fun registerDir(dirPath: Path): Registration =
         watchEntriesCache.getOrCreate(
             WatchEntry(isFile = false, dirPath)
         ) { watchEntry ->
+            val wereNotWatchingBefore = findFilesInDir(dirPath).filter { !this.isFileAllowed(it) }
+
             getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
             val registration = dirWatcher.register(dirPath)
-            listener(FSEventKind.START_WATCH_DIR, dirPath)
+
+            wereNotWatchingBefore.forEach { listener(FSEventKind.CREATE, it) }
 
             Registration(
                 watchEntry, registration, this
             )
         }
 
+    private fun findFilesInDir(dirPath: Path): List<Path> {
+        val ret = ArrayList<Path>()
+        forEachFileInDir(dirPath, ret::add)
+        return ret
+    }
+
     private fun unregisterDir(dirPath: Path) {
         getWatchFiltersForDir(dirPath).removeIf(WatchDirFilter::isAllFiles)
-        listener(FSEventKind.STOP_WATCH_DIR, dirPath)
+        forEachFileInDir(dirPath, this::stopWatchingFile)
+    }
+
+    private fun stopWatchingFile(filePath: Path) {
+        val isStillWatching = isFileAllowed(filePath)
+        if (!isStillWatching) {
+            listener(FSEventKind.DELETE, filePath)
+        }
     }
 
     private fun cancelRegistration(registration: Registration) =
@@ -99,9 +115,9 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     private fun getWatchFiltersForDir(dirPath: Path) = watchFilters.computeIfAbsent(dirPath) { ConcurrentHashMap() }
 
-    private fun handleDirWatchEvents(eventKind: DirWatcher.EventKind, path: Path) {
+    private fun handleDirWatchEvents(eventKind: FSEventKind, path: Path) {
         if (isFileAllowed(path)) {
-            listener(eventKind.toFSEventKind(), path)
+            listener(eventKind, path)
         }
     }
 
@@ -110,11 +126,11 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     override fun close() = dirWatcher.close()
 
-}
+    private fun forEachFileInDir(dirPath: Path, action: (Path) -> Unit) =
+        Files.walk(dirPath, 1).use {
+            it
+                .filter(Files::isRegularFile)
+                .forEach(action)
+        }
 
-private fun DirWatcher.EventKind.toFSEventKind() =
-    when (this) {
-        DirWatcher.EventKind.CREATE -> FSEventKind.CREATE
-        DirWatcher.EventKind.DELETE -> FSEventKind.DELETE
-        DirWatcher.EventKind.MODIFY -> FSEventKind.MODIFY
-    }
+}
