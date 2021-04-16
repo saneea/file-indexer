@@ -3,11 +3,11 @@ package io.github.saneea.fileindexer.core.filewatcher
 import io.github.saneea.fileindexer.core.utils.UsageRegistry
 import java.nio.file.*
 
-class DirWatcher(val listener: (EventKind, Path) -> Unit) : AutoCloseable {
+enum class FSEventKind {
+    CREATE, DELETE, MODIFY
+}
 
-    enum class EventKind {
-        CREATE, DELETE, MODIFY
-    }
+class DirWatcher(val listener: (FSEventKind, Path) -> Unit) : AutoCloseable {
 
     data class Registration(
         private val watchKeyRegistry: UsageRegistry<WatchKey>,
@@ -85,8 +85,8 @@ class DirWatcher(val listener: (EventKind, Path) -> Unit) : AutoCloseable {
 
 private fun <T> WatchEvent.Kind<T>.toDirWatcherEventKind() =
     when (this) {
-        StandardWatchEventKinds.ENTRY_CREATE -> DirWatcher.EventKind.CREATE
-        StandardWatchEventKinds.ENTRY_DELETE -> DirWatcher.EventKind.DELETE
-        StandardWatchEventKinds.ENTRY_MODIFY -> DirWatcher.EventKind.MODIFY
+        StandardWatchEventKinds.ENTRY_CREATE -> FSEventKind.CREATE
+        StandardWatchEventKinds.ENTRY_DELETE -> FSEventKind.DELETE
+        StandardWatchEventKinds.ENTRY_MODIFY -> FSEventKind.MODIFY
         else -> throw IllegalArgumentException("Unknown WatchEvent.Kind: $this")
     }

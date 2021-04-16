@@ -2,12 +2,9 @@ package io.github.saneea.fileindexer.core.filewatcher
 
 import io.github.saneea.fileindexer.core.utils.Cache
 import io.github.saneea.fileindexer.core.utils.removeIf
-import java.nio.file.*
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-
-enum class FSEventKind {
-    CREATE, DELETE, MODIFY, START_WATCH_DIR, STOP_WATCH_DIR, START_WATCH_FILE, STOP_WATCH_FILE
-}
 
 interface WatchDirFilter {
     val isAllFiles: Boolean
@@ -54,7 +51,7 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
             val dirPath = filePath.parent
             getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
             val registration = dirWatcher.register(dirPath)
-            listener(FSEventKind.START_WATCH_FILE, filePath)
+            listener(FSEventKind.CREATE, filePath)
 
             Registration(
                 watchEntry, registration, this
@@ -66,7 +63,7 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
         getWatchFiltersForDir(dirPath).removeIf {
             it is OneFileWatchDirFilter && it.allowedFilePath == filePath
         }
-        listener(FSEventKind.STOP_WATCH_FILE, filePath)
+        listener(FSEventKind.DELETE, filePath)
     }
 
     fun registerDir(dirPath: Path): Registration =
@@ -75,7 +72,7 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
         ) { watchEntry ->
             getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
             val registration = dirWatcher.register(dirPath)
-            listener(FSEventKind.START_WATCH_DIR, dirPath)
+            findFilesAndReportToListener(dirPath, FSEventKind.CREATE)
 
             Registration(
                 watchEntry, registration, this
@@ -84,7 +81,7 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     private fun unregisterDir(dirPath: Path) {
         getWatchFiltersForDir(dirPath).removeIf(WatchDirFilter::isAllFiles)
-        listener(FSEventKind.STOP_WATCH_DIR, dirPath)
+        findFilesAndReportToListener(dirPath, FSEventKind.DELETE)
     }
 
     private fun cancelRegistration(registration: Registration) =
@@ -99,9 +96,9 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     private fun getWatchFiltersForDir(dirPath: Path) = watchFilters.computeIfAbsent(dirPath) { ConcurrentHashMap() }
 
-    private fun handleDirWatchEvents(eventKind: DirWatcher.EventKind, path: Path) {
+    private fun handleDirWatchEvents(eventKind: FSEventKind, path: Path) {
         if (isFileAllowed(path)) {
-            listener(eventKind.toFSEventKind(), path)
+            listener(eventKind, path)
         }
     }
 
@@ -110,11 +107,12 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
 
     override fun close() = dirWatcher.close()
 
-}
-
-private fun DirWatcher.EventKind.toFSEventKind() =
-    when (this) {
-        DirWatcher.EventKind.CREATE -> FSEventKind.CREATE
-        DirWatcher.EventKind.DELETE -> FSEventKind.DELETE
-        DirWatcher.EventKind.MODIFY -> FSEventKind.MODIFY
+    private fun findFilesAndReportToListener(dirPath: Path, kind: FSEventKind) {
+        Files.walk(dirPath, 1).use { files ->
+            files
+                .filter(Files::isRegularFile)
+                .forEach { file -> listener(kind, file) }
+        }
     }
+
+}
