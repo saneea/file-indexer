@@ -61,7 +61,7 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
     private fun unregisterFile(filePath: Path) {
         val dirPath = filePath.parent
         getWatchFiltersForDir(dirPath).removeIf {
-            it is OneFileWatchDirFilter && it.allowedFilePath == filePath
+            (it as? OneFileWatchDirFilter)?.allowedFilePath == filePath
         }
         listener(FSEventKind.DELETE, filePath)
     }
