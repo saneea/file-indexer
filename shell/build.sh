@@ -1,1 +1,3 @@
+cd ..
 mvn clean install
+
