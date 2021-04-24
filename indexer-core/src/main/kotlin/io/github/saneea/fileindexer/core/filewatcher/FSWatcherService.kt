@@ -45,20 +45,22 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
     }
 
     fun registerFile(filePath: Path): Registration =
-        watchEntriesCache.getOrCreate(
-            WatchEntry(isFile = true, filePath)
-        ) { watchEntry ->
-            val isAlreadyWatched = isFileAllowed(filePath)
-            val dirPath = filePath.parent
-            getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
-            val registration = dirWatcher.register(dirPath)
-            if (!isAlreadyWatched) {
-                listener(FSEventKind.CREATE, filePath)
-            }
+        synchronized(watchEntriesCache) {
+            watchEntriesCache.getOrCreate(
+                WatchEntry(isFile = true, filePath)
+            ) { watchEntry ->
+                val isAlreadyWatched = isFileAllowed(filePath)
+                val dirPath = filePath.parent
+                getWatchFiltersForDir(dirPath)[OneFileWatchDirFilter(filePath)] = Any()
+                val registration = dirWatcher.register(dirPath)
+                if (!isAlreadyWatched) {
+                    listener(FSEventKind.CREATE, filePath)
+                }
 
-            Registration(
-                watchEntry, registration, this
-            )
+                Registration(
+                    watchEntry, registration, this
+                )
+            }
         }
 
     private fun unregisterFile(filePath: Path) {
@@ -70,19 +72,21 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
     }
 
     fun registerDir(dirPath: Path): Registration =
-        watchEntriesCache.getOrCreate(
-            WatchEntry(isFile = false, dirPath)
-        ) { watchEntry ->
-            val wereNotWatchingBefore = findFilesInDir(dirPath).filter { !this.isFileAllowed(it) }
+        synchronized(watchEntriesCache) {
+            watchEntriesCache.getOrCreate(
+                WatchEntry(isFile = false, dirPath)
+            ) { watchEntry ->
+                val wereNotWatchingBefore = findFilesInDir(dirPath).filter { !this.isFileAllowed(it) }
 
-            getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
-            val registration = dirWatcher.register(dirPath)
+                getWatchFiltersForDir(dirPath)[AllFilesWatchDirFilter()] = Any()
+                val registration = dirWatcher.register(dirPath)
 
-            wereNotWatchingBefore.forEach { listener(FSEventKind.CREATE, it) }
+                wereNotWatchingBefore.forEach { listener(FSEventKind.CREATE, it) }
 
-            Registration(
-                watchEntry, registration, this
-            )
+                Registration(
+                    watchEntry, registration, this
+                )
+            }
         }
 
     private fun findFilesInDir(dirPath: Path): List<Path> {
@@ -104,12 +108,14 @@ class FSWatcherService(val listener: FSWatcherListener) : AutoCloseable {
     }
 
     private fun cancelRegistration(registration: Registration) =
-        watchEntriesCache.free(registration.watchEntry) { watchEntry, _ ->
-            registration.dirRegistration.cancel()
-            if (watchEntry.isFile) {
-                unregisterFile(watchEntry.path)
-            } else {
-                unregisterDir(watchEntry.path)
+        synchronized(watchEntriesCache) {
+            watchEntriesCache.free(registration.watchEntry) { watchEntry, _ ->
+                registration.dirRegistration.cancel()
+                if (watchEntry.isFile) {
+                    unregisterFile(watchEntry.path)
+                } else {
+                    unregisterDir(watchEntry.path)
+                }
             }
         }
 
