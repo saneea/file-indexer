@@ -1,7 +1,8 @@
 package io.github.saneea.fileindexer.core.service
 
 import io.github.saneea.fileindexer.core.filewatcher.FSEventKind
-import io.github.saneea.fileindexer.core.filewatcher.FSWatcherService
+import io.github.saneea.fileindexer.core.filewatcher.FSWatcherPullService
+import io.github.saneea.fileindexer.core.filewatcher.FilesDiff
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
 import io.github.saneea.fileindexer.core.utils.index.*
 import java.io.FileInputStream
@@ -13,18 +14,24 @@ typealias FileTokenIndex = IndexTreeNode<Char, Set<Path>>
 
 class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
-    private val fsWatcher = FSWatcherService(::onFSEvent)
+    private val fsWatcher = FSWatcherPullService(1000, ::onFSEvents)
 
     private val fileTokenIndexRef = AtomicReference<FileTokenIndex>(emptyIndexTree())
 
     override fun close() = fsWatcher.close()
 
-    fun registerDir(dirPath: Path) = fsWatcher.registerDir(dirPath)
+    fun addObservable(dirPath: Path) = fsWatcher.addObservable(dirPath)
 
-    fun registerFile(filePath: Path) = fsWatcher.registerFile(filePath)
+    fun removeObservable(filePath: Path) = fsWatcher.removeObservable(filePath)
 
     fun getFilesForToken(token: String): Set<Path> =
         fileTokenIndexRef.get().selectResult(token.asIterable()) ?: Collections.emptySet()
+
+    private fun onFSEvents(diff: FilesDiff) {
+        for ((path, event) in diff) {
+            onFSEvent(event, path)
+        }
+    }
 
     private fun onFSEvent(event: FSEventKind, path: Path) {
         when (event) {
