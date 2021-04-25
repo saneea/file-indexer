@@ -1,6 +1,7 @@
 package io.github.saneea.fileindexer.core.utils.index
 
 import org.junit.Test
+import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
 
@@ -110,26 +111,10 @@ class IndexTreeNodeBuilderTest {
     private fun IndexTreeNode<Char, Int>.verify(expected: Map<String, Int>) =
         assertEquals(expected, getTextBranches())
 
-    private fun IndexTreeNode<Char, Int>.getTextBranches(): Map<String, Int> {
-        val ret = HashMap<String, Int>()
-        getTextBranches("", ret)
-        return ret
-    }
-
-    private fun IndexTreeNode<Char, Int>.getTextBranches(
-        currentBranchSequence: String,
-        ret: MutableMap<String, Int>
-    ) {
-
-        val result = result
-        if (result != null) {
-            ret[currentBranchSequence] = result
-        }
-
-        for (childId in childIds) {
-            this[childId]!!.getTextBranches(currentBranchSequence + childId, ret)
-        }
-    }
+    private fun IndexTreeNode<Char, Int>.getTextBranches(): Map<String, Int> =
+        findBranchesForResult(Objects::nonNull)
+            .mapKeys { (k, _) -> String(k.toCharArray()) }
+            .mapValues { (_, v) -> v!! }
 
     private fun IndexTreeNodeBuilder<Char, Int>.addStringBranches(branches: Map<String, Int>) =
         branches.forEach { (k, v) ->
