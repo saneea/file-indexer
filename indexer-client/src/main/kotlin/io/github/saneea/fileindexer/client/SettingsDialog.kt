@@ -1,14 +1,14 @@
 package io.github.saneea.fileindexer.client
 
-import io.github.saneea.fileindexer.core.filewatcher.FSWatcherService
+import java.nio.file.Path
 import javax.swing.*
 
 data class WatchEntry(
-    val registration: FSWatcherService.Registration
+    val path: Path,
+    val isFile: Boolean
 ) {
     override fun toString(): String {
-        val entry = registration.watchEntry
-        return "${if (entry.isFile) "File" else "Dir"}: ${entry.path}"
+        return "${if (isFile) "File" else "Dir"}: $path"
     }
 }
 
@@ -24,8 +24,13 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     private val currentWatchEntriesList = JList(currentWatchEntriesListModel)
     private val currentWatchEntriesListWithScroll = JScrollPane(currentWatchEntriesList)
 
-    private val selectedEntry: WatchEntry?
+    private var selectedEntry: WatchEntry?
         get() = currentWatchEntriesList.selectedValue
+        set(value) {
+            if (value != null) {
+                currentWatchEntriesList.setSelectedValue(value, true)
+            }
+        }
 
     init {
         registerUIActions()
@@ -60,14 +65,14 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
     private fun registerDelFSEntryButtonAction(button: JButton) {
         button.addActionListener {
             if (selectedEntry != null) {
-                selectedEntry!!.registration.cancel()
+                ownerWindow.fileIndexerService.removeObservable(selectedEntry!!.path)
                 currentWatchEntriesListModel.removeElement(selectedEntry)
             }
         }
     }
 
     private fun updateDelFSEntryButton(button: JButton, isFile: Boolean) {
-        button.isEnabled = selectedEntry != null && isFile == selectedEntry!!.registration.watchEntry.isFile
+        button.isEnabled = selectedEntry != null && isFile == selectedEntry!!.isFile
     }
 
     private fun registerAddDirButtonAction() {
@@ -76,8 +81,12 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             fileChooserDialog.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                val watcherRegistration = ownerWindow.fileIndexerService.registerDir(pathToAdd)
-                currentWatchEntriesListModel.addElement(WatchEntry(watcherRegistration))
+                val watchEntry = WatchEntry(pathToAdd, false)
+                if (!currentWatchEntriesListModel.contains(watchEntry)) {
+                    ownerWindow.fileIndexerService.addObservable(pathToAdd)
+                    currentWatchEntriesListModel.addElement(watchEntry)
+                }
+                selectedEntry = watchEntry
             }
         }
     }
@@ -88,8 +97,12 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             fileChooserDialog.fileSelectionMode = JFileChooser.FILES_ONLY
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                val watcherRegistration = ownerWindow.fileIndexerService.registerFile(pathToAdd)
-                currentWatchEntriesListModel.addElement(WatchEntry(watcherRegistration))
+                val watchEntry = WatchEntry(pathToAdd, true)
+                if (!currentWatchEntriesListModel.contains(watchEntry)) {
+                    ownerWindow.fileIndexerService.addObservable(pathToAdd)
+                    currentWatchEntriesListModel.addElement(watchEntry)
+                }
+                selectedEntry = watchEntry
             }
         }
     }
