@@ -3,28 +3,17 @@ package io.github.saneea.fileindexer.client
 import java.nio.file.Path
 import javax.swing.*
 
-data class WatchEntry(
-    val path: Path,
-    val isFile: Boolean
-) {
-    override fun toString(): String {
-        return "${if (isFile) "File" else "Dir"}: $path"
-    }
-}
-
 class SettingsDialog(private val ownerWindow: MainWindow) :
     JDialog(ownerWindow, "Settings", false) {
 
-    private val addDirButton = JButton("+ dir")
-    private val delDirButton = JButton("- dir")
-    private val addFileButton = JButton("+ file")
-    private val delFileButton = JButton("- file")
+    private val addPathButton = JButton("+ path")
+    private val delPathButton = JButton("- path")
 
-    private val currentWatchEntriesListModel = DefaultListModel<WatchEntry>()
+    private val currentWatchEntriesListModel = DefaultListModel<Path>()
     private val currentWatchEntriesList = JList(currentWatchEntriesListModel)
     private val currentWatchEntriesListWithScroll = JScrollPane(currentWatchEntriesList)
 
-    private var selectedEntry: WatchEntry?
+    private var selectedEntry: Path?
         get() = currentWatchEntriesList.selectedValue
         set(value) {
             if (value != null) {
@@ -33,76 +22,44 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
         }
 
     init {
-        registerUIActions()
-        initButtonsSettings()
+        registerButtonsActions()
+        updateDelPathButtonsSettings()
         createLayout()
         pack()
     }
 
-    private fun initButtonsSettings() {
-        updateButtonsSettings()
+    private fun updateDelPathButtonsSettings() {
+        delPathButton.isEnabled = selectedEntry != null
     }
 
-    private fun updateButtonsSettings() {
-        updateDelFSEntryButton(delDirButton, isFile = false)
-        updateDelFSEntryButton(delFileButton, isFile = true)
+    private fun registerButtonsActions() {
+        currentWatchEntriesList.addListSelectionListener { updateDelPathButtonsSettings() }
+
+        registerAddPathButtonAction()
+        registerDelPathButtonAction(delPathButton)
     }
 
-    private fun registerUIActions() {
-        registerButtonActions()
-    }
-
-    private fun registerButtonActions() {
-        currentWatchEntriesList.addListSelectionListener { updateButtonsSettings() }
-
-        registerAddDirButtonAction()
-        registerDelFSEntryButtonAction(delDirButton)
-
-        registerAddFileButtonAction()
-        registerDelFSEntryButtonAction(delFileButton)
-    }
-
-    private fun registerDelFSEntryButtonAction(button: JButton) {
+    private fun registerDelPathButtonAction(button: JButton) {
         button.addActionListener {
-            if (selectedEntry != null) {
-                ownerWindow.fileIndexerService.removeObservable(selectedEntry!!.path)
-                currentWatchEntriesListModel.removeElement(selectedEntry)
+            val selectedEntryLocal = selectedEntry
+            if (selectedEntryLocal != null) {
+                ownerWindow.fileIndexerService.removeObservable(selectedEntryLocal)
+                currentWatchEntriesListModel.removeElement(selectedEntryLocal)
             }
         }
     }
 
-    private fun updateDelFSEntryButton(button: JButton, isFile: Boolean) {
-        button.isEnabled = selectedEntry != null && isFile == selectedEntry!!.isFile
-    }
-
-    private fun registerAddDirButtonAction() {
-        addDirButton.addActionListener {
+    private fun registerAddPathButtonAction() {
+        addPathButton.addActionListener {
             val fileChooserDialog = JFileChooser()
-            fileChooserDialog.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+            fileChooserDialog.fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
             if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                val watchEntry = WatchEntry(pathToAdd, false)
-                if (!currentWatchEntriesListModel.contains(watchEntry)) {
+                if (!currentWatchEntriesListModel.contains(pathToAdd)) {
                     ownerWindow.fileIndexerService.addObservable(pathToAdd)
-                    currentWatchEntriesListModel.addElement(watchEntry)
+                    currentWatchEntriesListModel.addElement(pathToAdd)
                 }
-                selectedEntry = watchEntry
-            }
-        }
-    }
-
-    private fun registerAddFileButtonAction() {
-        addFileButton.addActionListener {
-            val fileChooserDialog = JFileChooser()
-            fileChooserDialog.fileSelectionMode = JFileChooser.FILES_ONLY
-            if (fileChooserDialog.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                val pathToAdd = fileChooserDialog.selectedFile.toPath()
-                val watchEntry = WatchEntry(pathToAdd, true)
-                if (!currentWatchEntriesListModel.contains(watchEntry)) {
-                    ownerWindow.fileIndexerService.addObservable(pathToAdd)
-                    currentWatchEntriesListModel.addElement(watchEntry)
-                }
-                selectedEntry = watchEntry
+                selectedEntry = pathToAdd
             }
         }
     }
@@ -118,10 +75,8 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             layout.createParallelGroup()
                 .addGroup(
                     layout.createSequentialGroup()
-                        .addComponent(addDirButton)
-                        .addComponent(delDirButton)
-                        .addComponent(addFileButton)
-                        .addComponent(delFileButton)
+                        .addComponent(addPathButton)
+                        .addComponent(delPathButton)
                 )
                 .addComponent(currentWatchEntriesListWithScroll)
         )
@@ -130,10 +85,8 @@ class SettingsDialog(private val ownerWindow: MainWindow) :
             layout.createSequentialGroup()
                 .addGroup(
                     layout.createParallelGroup()
-                        .addComponent(addDirButton)
-                        .addComponent(delDirButton)
-                        .addComponent(addFileButton)
-                        .addComponent(delFileButton)
+                        .addComponent(addPathButton)
+                        .addComponent(delPathButton)
                 )
                 .addComponent(currentWatchEntriesListWithScroll)
         )
