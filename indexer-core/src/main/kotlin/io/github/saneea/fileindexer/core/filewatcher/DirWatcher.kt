@@ -1,29 +1,9 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
-import io.github.saneea.fileindexer.core.filewatcher.FSEventKind.*
+import io.github.saneea.fileindexer.core.common.FSEventKind
+import io.github.saneea.fileindexer.core.common.FSEventKind.*
 import io.github.saneea.fileindexer.core.utils.UsageRegistry
 import java.nio.file.*
-
-enum class FSEventKind {
-    CREATE, DELETE, MODIFY
-}
-
-fun List<FSEventKind>.merge() = when (this.size) {
-    0 -> null
-    1 -> this.first()
-    else -> this.first() merge this.last()
-}
-
-infix fun FSEventKind.merge(other: FSEventKind) = when (this) {
-    CREATE -> when (other) {
-        CREATE, MODIFY -> CREATE
-        DELETE -> null
-    }
-    MODIFY, DELETE -> when (other) {
-        CREATE -> MODIFY
-        MODIFY, DELETE -> other
-    }
-}
 
 class DirWatcher(val listener: (FSEventKind, Path) -> Unit) : AutoCloseable {
 

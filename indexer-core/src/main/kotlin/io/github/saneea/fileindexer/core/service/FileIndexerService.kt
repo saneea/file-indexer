@@ -1,6 +1,6 @@
 package io.github.saneea.fileindexer.core.service
 
-import io.github.saneea.fileindexer.core.filewatcher.FSEventKind
+import io.github.saneea.fileindexer.core.common.FSEventKind
 import io.github.saneea.fileindexer.core.filewatcher.FSWatcherPullService
 import io.github.saneea.fileindexer.core.filewatcher.FilesDiff
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer

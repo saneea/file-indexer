@@ -1,6 +1,6 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
-import io.github.saneea.fileindexer.core.filewatcher.FSEventKind.*
+import io.github.saneea.fileindexer.core.common.FSEventKind.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
