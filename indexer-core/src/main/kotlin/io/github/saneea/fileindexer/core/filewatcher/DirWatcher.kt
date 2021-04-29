@@ -1,11 +1,9 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
+import io.github.saneea.fileindexer.core.common.FSEventKind
+import io.github.saneea.fileindexer.core.common.FSEventKind.*
 import io.github.saneea.fileindexer.core.utils.UsageRegistry
 import java.nio.file.*
-
-enum class FSEventKind {
-    CREATE, DELETE, MODIFY
-}
 
 class DirWatcher(val listener: (FSEventKind, Path) -> Unit) : AutoCloseable {
 
@@ -85,8 +83,8 @@ class DirWatcher(val listener: (FSEventKind, Path) -> Unit) : AutoCloseable {
 
 private fun <T> WatchEvent.Kind<T>.toDirWatcherEventKind() =
     when (this) {
-        StandardWatchEventKinds.ENTRY_CREATE -> FSEventKind.CREATE
-        StandardWatchEventKinds.ENTRY_DELETE -> FSEventKind.DELETE
-        StandardWatchEventKinds.ENTRY_MODIFY -> FSEventKind.MODIFY
+        StandardWatchEventKinds.ENTRY_CREATE -> CREATE
+        StandardWatchEventKinds.ENTRY_DELETE -> DELETE
+        StandardWatchEventKinds.ENTRY_MODIFY -> MODIFY
         else -> throw IllegalArgumentException("Unknown WatchEvent.Kind: $this")
     }

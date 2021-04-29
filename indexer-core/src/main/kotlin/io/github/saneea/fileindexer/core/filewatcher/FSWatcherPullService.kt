@@ -1,5 +1,6 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
+import io.github.saneea.fileindexer.core.common.FSEventKind
 import java.io.File
 import java.nio.file.Path
 

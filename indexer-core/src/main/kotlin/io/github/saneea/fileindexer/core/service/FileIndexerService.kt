@@ -1,6 +1,8 @@
 package io.github.saneea.fileindexer.core.service
 
-import io.github.saneea.fileindexer.core.filewatcher.FSEventKind
+import io.github.saneea.fileindexer.core.common.FSEventKind
+import io.github.saneea.fileindexer.core.filewatcher.FSEvent
+import io.github.saneea.fileindexer.core.filewatcher.FSEventsBuffer
 import io.github.saneea.fileindexer.core.filewatcher.FSWatcherPullService
 import io.github.saneea.fileindexer.core.filewatcher.FilesDiff
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
@@ -14,11 +16,24 @@ typealias FileTokenIndex = IndexTreeNode<Char, Set<Path>>
 
 class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
-    private val fsWatcher = FSWatcherPullService(1000, ::onFSEvents)
+    private val fsWatcher = FSWatcherPullService(1000, ::putFSEventsToQueue)
+
+    private val processFSEventsThread = Thread(::readEventsFromQueue, "Process FS Events")
+
+    private val fsEventsBuffer = FSEventsBuffer()
 
     private val fileTokenIndexRef = AtomicReference<FileTokenIndex>(emptyIndexTree())
 
-    override fun close() = fsWatcher.close()
+    override fun close() {
+        fsWatcher.close()
+        processFSEventsThread.interrupt()
+        processFSEventsThread.join()
+    }
+
+    init {
+        processFSEventsThread.isDaemon = true
+        processFSEventsThread.start()
+    }
 
     fun addObservable(dirPath: Path) = fsWatcher.addObservable(dirPath)
 
@@ -27,9 +42,24 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
     fun getFilesForToken(token: String): Set<Path> =
         fileTokenIndexRef.get().selectResult(token.asIterable()) ?: Collections.emptySet()
 
-    private fun onFSEvents(diff: FilesDiff) {
+    private fun putFSEventsToQueue(diff: FilesDiff) {
         for ((path, event) in diff) {
-            onFSEvent(event, path)
+            fsEventsBuffer.addEvent(FSEvent(event, path))
+        }
+    }
+
+    private fun readEventsFromQueue() {
+        while (true) {
+            val event = fsEventsBuffer.pollEvent()
+            if (event == null) {
+                Thread.sleep(1000)
+            } else {
+                try {
+                    onFSEvent(event.eventKind, event.path)
+                } catch (ignore: Exception) {
+                    //log it
+                }
+            }
         }
     }
 

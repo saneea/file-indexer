@@ -1,5 +1,6 @@
 package io.github.saneea.fileindexer.core.filewatcher
 
+import io.github.saneea.fileindexer.core.common.FSEventKind
 import io.github.saneea.fileindexer.core.utils.Cache
 import io.github.saneea.fileindexer.core.utils.removeIf
 import java.nio.file.Files
