@@ -52,19 +52,23 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
     }
 
     private fun readEventsFromQueue() {
-        while (true) {
-            val event = fsEventsBuffer.pollEvent()
-            if (event == null) {
-                Thread.sleep(1000)
-            } else {
-                try {
-                    log.info("start process ${event.eventKind} for ${event.path}")
-                    onFSEvent(event.eventKind, event.path)
-                    log.info("success finish process ${event.eventKind} for ${event.path}")
-                } catch (e: Exception) {
-                    log.info("exception during processing ${event.eventKind} for ${event.path}", e)
+        try {
+            while (true) {
+                val event = fsEventsBuffer.pollEvent()
+                if (event == null) {
+                    Thread.sleep(1000)
+                } else {
+                    try {
+                        log.info("start process ${event.eventKind} for ${event.path}")
+                        onFSEvent(event.eventKind, event.path)
+                        log.info("success finish process ${event.eventKind} for ${event.path}")
+                    } catch (e: Exception) {
+                        log.info("exception during processing ${event.eventKind} for ${event.path}", e)
+                    }
                 }
             }
+        } catch (ignore: InterruptedException) {
+            //it is expected case
         }
     }
 
