@@ -7,6 +7,7 @@ import io.github.saneea.fileindexer.core.filewatcher.FSWatcherPullService
 import io.github.saneea.fileindexer.core.filewatcher.FilesDiff
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
 import io.github.saneea.fileindexer.core.utils.index.*
+import org.slf4j.LoggerFactory
 import java.io.FileInputStream
 import java.nio.file.Path
 import java.util.*
@@ -15,6 +16,8 @@ import java.util.concurrent.atomic.AtomicReference
 typealias FileTokenIndex = IndexTreeNode<Char, Set<Path>>
 
 class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
+
+    private val log = LoggerFactory.getLogger(FileIndexerService::class.java)
 
     private val fsWatcher = FSWatcherPullService(1000, ::putFSEventsToQueue)
 
@@ -55,9 +58,11 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
                 Thread.sleep(1000)
             } else {
                 try {
+                    log.info("start process ${event.eventKind} for ${event.path}")
                     onFSEvent(event.eventKind, event.path)
-                } catch (ignore: Exception) {
-                    //log it
+                    log.info("success finish process ${event.eventKind} for ${event.path}")
+                } catch (e: Exception) {
+                    log.info("exception during processing ${event.eventKind} for ${event.path}", e)
                 }
             }
         }
