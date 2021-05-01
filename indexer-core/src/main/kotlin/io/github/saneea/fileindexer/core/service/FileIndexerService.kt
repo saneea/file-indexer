@@ -67,7 +67,9 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         when (event) {
             FSEventKind.DELETE -> removeFile(path)
 
-            FSEventKind.CREATE, FSEventKind.MODIFY -> {
+            FSEventKind.CREATE -> parseFile(path)
+
+            FSEventKind.MODIFY -> {
                 removeFile(path)
                 parseFile(path)
             }
