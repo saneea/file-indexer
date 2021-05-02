@@ -7,18 +7,21 @@ import io.github.saneea.fileindexer.core.filewatcher.FSWatcherPullService
 import io.github.saneea.fileindexer.core.filewatcher.FilesDiff
 import io.github.saneea.fileindexer.core.tokenizer.Tokenizer
 import io.github.saneea.fileindexer.core.utils.index.*
+import org.slf4j.LoggerFactory
 import java.io.FileInputStream
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
 
-typealias FileTokenIndex = IndexTreeNode<Char, Set<Path>>
-
 class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
+
+    val defaultCharset = Charsets.UTF_8
+
+    private val log = LoggerFactory.getLogger(FileIndexerService::class.java)
 
     private val fsWatcher = FSWatcherPullService(1000, ::putFSEventsToQueue)
 
-    private val processFSEventsThread = Thread(::readEventsFromQueue, "Process FS Events")
+    private val processFSEventsThread = Thread(::readFSEventsFromQueue, "Process FS Events")
 
     private val fsEventsBuffer = FSEventsBuffer()
 
@@ -35,9 +38,9 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         processFSEventsThread.start()
     }
 
-    fun addObservable(dirPath: Path) = fsWatcher.addObservable(dirPath)
+    fun addObservable(path: Path) = fsWatcher.addObservable(path)
 
-    fun removeObservable(filePath: Path) = fsWatcher.removeObservable(filePath)
+    fun removeObservable(path: Path) = fsWatcher.removeObservable(path)
 
     fun getFilesForToken(token: String): Set<Path> =
         fileTokenIndexRef.get().selectResult(token.asIterable()) ?: Collections.emptySet()
@@ -48,18 +51,20 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         }
     }
 
-    private fun readEventsFromQueue() {
-        while (true) {
-            val event = fsEventsBuffer.pollEvent()
-            if (event == null) {
-                Thread.sleep(1000)
-            } else {
+    private fun readFSEventsFromQueue() {
+        try {
+            while (true) {
+                val event = fsEventsBuffer.takeEvent()
+                log.info("start process ${event.eventKind} for ${event.path}")
                 try {
                     onFSEvent(event.eventKind, event.path)
-                } catch (ignore: Exception) {
-                    //log it
+                    log.info("success finish process ${event.eventKind} for ${event.path}")
+                } catch (e: Exception) {
+                    log.info("exception during processing ${event.eventKind} for ${event.path}", e)
                 }
             }
+        } catch (ignore: InterruptedException) {
+            //it is expected case
         }
     }
 
@@ -67,28 +72,30 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         when (event) {
             FSEventKind.DELETE -> removeFile(path)
 
-            FSEventKind.CREATE -> parseFile(path)
+            FSEventKind.CREATE -> addFileTokensToIndex(path)
 
             FSEventKind.MODIFY -> {
                 removeFile(path)
-                parseFile(path)
+                addFileTokensToIndex(path)
             }
         }
     }
 
-    private fun parseFile(path: Path) {
-
+    private fun addFileTokensToIndex(path: Path) {
+        val tokens = parseFile(path)
         val fileTokenIndexBuilder = IndexTreeNodeBuilder(fileTokenIndexRef.get())
-
-        FileInputStream(path.toFile())
-            .bufferedReader(Charsets.UTF_8)
-            .use { reader ->
-                tokenizer.parse(reader) { token: String ->
-                    fileTokenIndexBuilder.addFileForToken(token, path)
-                }
-            }
-
+        tokens.forEach { token -> fileTokenIndexBuilder.addFileForToken(token, path) }
         fileTokenIndexRef.set(fileTokenIndexBuilder.build())
+    }
+
+    private fun parseFile(path: Path): Set<String> {
+        val tokens = HashSet<String>()
+        FileInputStream(path.toFile())
+            .bufferedReader(defaultCharset)
+            .use { reader ->
+                tokenizer.parse(reader, tokens::add)
+            }
+        return tokens
     }
 
     private fun removeFile(path: Path) {

@@ -34,4 +34,13 @@ class FSEventsBuffer {
         }
     }
 
+    fun takeEvent(): FSEvent {
+        while (true) {
+            val event = pollEvent()
+            if (event != null) {
+                return event
+            }
+            Thread.sleep(1000)
+        }
+    }
 }
