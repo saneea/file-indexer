@@ -15,6 +15,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
+    val defaultCharset = Charsets.UTF_8
+
     private val log = LoggerFactory.getLogger(FileIndexerService::class.java)
 
     private val fsWatcher = FSWatcherPullService(1000, ::putFSEventsToQueue)
@@ -36,9 +38,9 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         processFSEventsThread.start()
     }
 
-    fun addObservable(dirPath: Path) = fsWatcher.addObservable(dirPath)
+    fun addObservable(path: Path) = fsWatcher.addObservable(path)
 
-    fun removeObservable(filePath: Path) = fsWatcher.removeObservable(filePath)
+    fun removeObservable(path: Path) = fsWatcher.removeObservable(path)
 
     fun getFilesForToken(token: String): Set<Path> =
         fileTokenIndexRef.get().selectResult(token.asIterable()) ?: Collections.emptySet()
@@ -89,7 +91,7 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
     private fun parseFile(path: Path): Set<String> {
         val tokens = HashSet<String>()
         FileInputStream(path.toFile())
-            .bufferedReader(Charsets.UTF_8)
+            .bufferedReader(defaultCharset)
             .use { reader ->
                 tokenizer.parse(reader, tokens::add)
             }
