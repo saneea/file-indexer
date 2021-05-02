@@ -12,9 +12,6 @@ import java.io.FileInputStream
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.collections.HashSet
-
-typealias FileTokenIndex = IndexTreeNode<Char, Set<Path>>
 
 class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
@@ -22,7 +19,7 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
 
     private val fsWatcher = FSWatcherPullService(1000, ::putFSEventsToQueue)
 
-    private val processFSEventsThread = Thread(::readEventsFromQueue, "Process FS Events")
+    private val processFSEventsThread = Thread(::readFSEventsFromQueue, "Process FS Events")
 
     private val fsEventsBuffer = FSEventsBuffer()
 
@@ -52,20 +49,16 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         }
     }
 
-    private fun readEventsFromQueue() {
+    private fun readFSEventsFromQueue() {
         try {
             while (true) {
-                val event = fsEventsBuffer.pollEvent()
-                if (event == null) {
-                    Thread.sleep(1000)
-                } else {
-                    try {
-                        log.info("start process ${event.eventKind} for ${event.path}")
-                        onFSEvent(event.eventKind, event.path)
-                        log.info("success finish process ${event.eventKind} for ${event.path}")
-                    } catch (e: Exception) {
-                        log.info("exception during processing ${event.eventKind} for ${event.path}", e)
-                    }
+                val event = fsEventsBuffer.takeEvent()
+                log.info("start process ${event.eventKind} for ${event.path}")
+                try {
+                    onFSEvent(event.eventKind, event.path)
+                    log.info("success finish process ${event.eventKind} for ${event.path}")
+                } catch (e: Exception) {
+                    log.info("exception during processing ${event.eventKind} for ${event.path}", e)
                 }
             }
         } catch (ignore: InterruptedException) {
