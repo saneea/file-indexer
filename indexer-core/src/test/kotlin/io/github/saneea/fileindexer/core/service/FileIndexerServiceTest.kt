@@ -9,6 +9,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.nio.file.Path
 import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
@@ -68,6 +69,37 @@ class FileIndexerServiceTest {
         service.removeObservable(files[0])
         sleep()
         assertEquals(emptySet(), service.getFilesForToken("world"))
+    }
+
+    @Test
+    fun testTrackDirs() {
+        val dirs = (0..2).map { root.resolve("dir_$it") }
+
+        dirs.forEach(Path::createDirectories)
+
+        val files = dirs.map { dir ->
+            (0..2).map { fileId ->
+                dir.resolve("file_$fileId.txt")
+            }
+        }
+
+        files[0][0].writeText("hello world", charset)
+
+        (0..1).map { dirs[it] }.forEach(service::addObservable)
+        sleep()
+        assertEquals(setOf(files[0][0]), service.getFilesForToken("world"))
+
+        files[0][1].writeText("my world", charset)
+        sleep()
+        assertEquals(setOf(files[0][0], files[0][1]), service.getFilesForToken("world"))
+
+        files[1][1].writeText("my world in folder1/file1", charset)
+        sleep()
+        assertEquals(setOf(files[0][0], files[0][1], files[1][1]), service.getFilesForToken("world"))
+
+        files[2][0].writeText("world for file from untracked dir", charset)
+        sleep()
+        assertEquals(setOf(files[0][0], files[0][1], files[1][1]), service.getFilesForToken("world"))
     }
 
     private fun sleep() = Thread.sleep(waitTime)
