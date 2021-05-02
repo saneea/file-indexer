@@ -12,6 +12,7 @@ import java.io.FileInputStream
 import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.collections.HashSet
 
 typealias FileTokenIndex = IndexTreeNode<Char, Set<Path>>
 
@@ -76,28 +77,30 @@ class FileIndexerService(private val tokenizer: Tokenizer) : AutoCloseable {
         when (event) {
             FSEventKind.DELETE -> removeFile(path)
 
-            FSEventKind.CREATE -> parseFile(path)
+            FSEventKind.CREATE -> addFileTokensToIndex(path)
 
             FSEventKind.MODIFY -> {
                 removeFile(path)
-                parseFile(path)
+                addFileTokensToIndex(path)
             }
         }
     }
 
-    private fun parseFile(path: Path) {
-
+    private fun addFileTokensToIndex(path: Path) {
+        val tokens = parseFile(path)
         val fileTokenIndexBuilder = IndexTreeNodeBuilder(fileTokenIndexRef.get())
+        tokens.forEach { token -> fileTokenIndexBuilder.addFileForToken(token, path) }
+        fileTokenIndexRef.set(fileTokenIndexBuilder.build())
+    }
 
+    private fun parseFile(path: Path): Set<String> {
+        val tokens = HashSet<String>()
         FileInputStream(path.toFile())
             .bufferedReader(Charsets.UTF_8)
             .use { reader ->
-                tokenizer.parse(reader) { token: String ->
-                    fileTokenIndexBuilder.addFileForToken(token, path)
-                }
+                tokenizer.parse(reader, tokens::add)
             }
-
-        fileTokenIndexRef.set(fileTokenIndexBuilder.build())
+        return tokens
     }
 
     private fun removeFile(path: Path) {
