@@ -102,5 +102,26 @@ class FileIndexerServiceTest {
         assertEquals(setOf(files[0][0], files[0][1], files[1][1]), service.getFilesForToken("world"))
     }
 
+    @Test
+    fun testTrackFileChange() {
+        val file = root.resolve("file.txt")
+
+        service.addObservable(file)
+
+        file.writeText("hello world", charset)
+        sleep()
+
+        assertEquals(setOf(file), service.getFilesForToken("hello"))
+        assertEquals(setOf(file), service.getFilesForToken("world"))
+        assertEquals(emptySet(), service.getFilesForToken("my"))
+
+        file.writeText("my world", charset)
+        sleep()
+
+        assertEquals(emptySet(), service.getFilesForToken("hello"))
+        assertEquals(setOf(file), service.getFilesForToken("world"))
+        assertEquals(setOf(file), service.getFilesForToken("my"))
+    }
+
     private fun sleep() = Thread.sleep(waitTime)
 }
